@@ -1,0 +1,40 @@
+FROM fedora:latest
+
+LABEL com.github.containers.toolbox="true" \
+      com.github.debarshiray.toolbox="true" \
+      org.opencontainers.image.title="bartledan" \
+      org.opencontainers.image.description="Optimized Pi Agent sandbox for Celestial-Uprising project"
+
+# Install Toolbx prerequisites, core utilities, and modern Node.js ecosystem dependencies
+RUN dnf -y update && dnf -y install \
+    git curl wget btop vim ripgrep fd-find zoxide bat eza jq tmux nodejs npm passwd \
+    && dnf clean all
+
+# Set terminal encoding and container fallbacks
+ENV LANG=en_US.UTF-8
+ENV PI_CODING_AGENT_DIR=/opt/pi-agent/config
+
+# Create configuration and empty workspace layers
+RUN mkdir -p ${PI_CODING_AGENT_DIR}
+
+# Install Pi Agent globally using clean production flags
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+
+# Build out an atomic settings injection to provision the theme engine and plugin suite cleanly
+RUN jq -n \
+  --arg theme "dark" \
+  '{"theme": $theme, "packages": ["npm:statusline-pi", "npm:webfox", "npm:pi-llama-cpp-stats", "npm:pi-llama-infra", "npm:pi-nvidia-nim", "npm:pi-extension-nvidia-nim", "git:://github.com", "npm:billion-context"]}' \
+  > ${PI_CODING_AGENT_DIR}/settings.json
+
+# Inject a default configuration for SoL-Pi to enable core local efficiency features safely
+RUN echo '{"version": 1, "actionFusion": true, "observationPack": true, "evidencePreservingReducer": false, "onlineContextCompact": false}' \
+  > ${PI_CODING_AGENT_DIR}/sol-pi.json
+
+# Expose target permissions natively for runtime container invocation modifications
+RUN chmod -R 777 /opt/pi-agent
+
+# Set up global profile triggers to automatically load workspace overrides when entering Toolbx
+RUN echo 'export PI_CODING_AGENT_DIR=/opt/pi-agent/config' > /etc/profile.d/pi-agent.sh && \
+    echo 'alias pi="PI_CODING_AGENT_DIR=/opt/pi-agent/config pi"' >> /etc/profile.d/pi-agent.sh && \
+    chmod +x /etc/profile.d/pi-agent.sh
+

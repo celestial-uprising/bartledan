@@ -1,0 +1,51 @@
+FROM fedora:latest
+
+LABEL com.github.containers.toolbox="true" \
+      com.github.debarshiray.toolbox="true" \
+      org.opencontainers.image.title="bartledan" \
+      org.opencontainers.image.description="Pi Agent Sandbox for Celestial-Uprising"
+
+# Install Toolbx prerequisites, core utilities, and modern Node.js ecosystem dependencies
+RUN dnf -y update && dnf -y install \
+    git curl wget btop vim ripgrep fd-find jq tmux nodejs npm passwd \
+    && dnf clean all
+
+# Set terminal encoding and container fallbacks
+ENV LANG=en_US.UTF-8
+ENV PI_CODING_AGENT_DIR=/opt/pi-agent/config
+
+# Standard defaults if no host/port are supplied at runtime
+ENV LLAMA_HOST=100.100.42.2
+ENV LLAMA_PORT=9999
+
+# Create configuration structure
+RUN mkdir -p ${PI_CODING_AGENT_DIR}
+
+# Install Pi Agent globally
+RUN npm install -g --ignore-scripts \
+    @earendil-works/pi-coding-agent
+
+# Build out settings injection with offline layout suite and generic OpenAI/local provider configuration
+RUN jq -n \
+  '{"provider": "openai", "packages": ["npm:statusline-pi", "npm:pi-slate", "npm:billion-context", "npm:@skdev-ai/pi-gemini-cli-provider",  "npm:webfox", "npm:pi-llama-cpp-stats", "npm:pi-llama-infra", "npm:pi-nvidia-nim", "npm:pi-extension-nvidia-nim"]}' \
+  > ${PI_CODING_AGENT_DIR}/settings.json
+]}' \
+  > ${PI_CODING_AGENT_DIR}/settings.json
+
+# Inject default configuration for SoL-Pi local efficiency features
+RUN echo '{"version": 1, "actionFusion": true, "observationPack": true, "evidencePreservingReducer": false, "onlineContextCompact": false}' \
+  > ${PI_CODING_AGENT_DIR}/sol-pi.json
+
+# Expose target permissions natively for runtime container invocation modifications
+RUN chmod -R 777 /opt/pi-agent
+
+# Dynamic profile trigger that constructs OPENAI_BASE_URL live at shell entry
+RUN echo 'export PI_CODING_AGENT_DIR=/opt/pi-agent/config' > /etc/profile.d/pi-agent.sh && \
+    echo 'if [ -z "$OPENAI_BASE_URL" ]; then' >> /etc/profile.d/pi-agent.sh && \
+    echo '  _HOST="${LLAMA_HOST:-100.100.42.2}"' >> /etc/profile.d/pi-agent.sh && \
+    echo '  _PORT="${LLAMA_PORT:-9999}"' >> /etc/profile.d/pi-agent.sh && \
+    echo '  export OPENAI_BASE_URL="http://${_HOST}:${_PORT}/v1"' >> /etc/profile.d/pi-agent.sh && \
+    echo 'fi' >> /etc/profile.d/pi-agent.sh && \
+    echo 'export OPENAI_API_KEY="${OPENAI_API_KEY:-llama.cpp}"' >> /etc/profile.d/pi-agent.sh && \
+    echo 'alias pi="PI_CODING_AGENT_DIR=/opt/pi-agent/config pi"' >> /etc/profile.d/pi-agent.sh && \
+    chmod +x /etc/profile.d/pi-agent.sh
